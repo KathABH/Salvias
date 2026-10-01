@@ -47,12 +47,12 @@ textarea.f{min-height:90px}textarea.big{min-height:150px}
 h2{font-size:16px;margin:22px 0 6px}
 #lb{position:fixed;inset:0;background:#000e;z-index:20;display:flex;align-items:center;justify-content:center}
 #lb img{max-width:100%;max-height:100%}
-.note{color:var(--mu);font-size:13px}
+textarea.sm{min-height:60px}.hc{flex:1;display:flex;flex-direction:column;gap:6px;min-width:0}.hp select.f{padding:8px}.note{color:var(--mu);font-size:13px}
 </style>
 </head>
 <body>
 <div id="list">
-  <header><h1>🌿 My Salvias <span id="cnt"></span></h1><input id="q" type="search" placeholder="Search name, colour, notes…" autocomplete="off"></header>
+  <header><h1>🌿 My Salvias <span id="cnt"></span></h1><input id="q" type="search" placeholder="Search name, variety, flower, notes…" autocomplete="off"></header>
   <main>
     <div id="items"></div>
     <h2>Backup</h2>
@@ -68,12 +68,14 @@ h2{font-size:16px;margin:22px 0 6px}
   <div class="bar"><button class="b" id="back">← Back</button><button class="b p" id="save">Save</button></div>
   <main>
     <label>Name</label><input class="f" data-k="name">
-    <label>Flower colour (as much detail as you like)</label><textarea class="f big" data-k="flower"></textarea>
-    <label>Leaf shape</label><textarea class="f" data-k="leaf"></textarea>
-    <label>Growing habit (height, spread, shape)</label><textarea class="f" data-k="habit"></textarea>
-    <label>Current health</label><textarea class="f" data-k="health"></textarea>
-    <div class="row"><div><label>Date planted</label><input class="f" type="date" data-k="planted"></div><div><label>Where purchased</label><input class="f" data-k="bought"></div></div>
-    <label>Details / history (nursery-bred, enthusiast-bred, origin…)</label><textarea class="f big" data-k="details"></textarea>
+    <label>Variety</label><select class="f" id="variety"></select>
+    <label>Flower</label><textarea class="f big" data-k="flower"></textarea>
+    <label>Leaf</label><textarea class="f" data-k="leaf"></textarea>
+    <label>Calyx</label><textarea class="f" data-k="calyx"></textarea>
+    <label>Height</label><textarea class="f sm" data-k="height"></textarea>
+    <label>Location</label><input class="f" data-k="location">
+    <label>Bought from</label><input class="f" data-k="bought" placeholder="e.g. Bunnings January 2025">
+    <label>Notes</label><textarea class="f big" data-k="notes" placeholder="History, nursery-bred or enthusiast-bred, anything else…"></textarea>
     <h2>Photos</h2><div id="ph"></div>
     <div style="margin-top:28px"><button class="b d hide" id="del">Delete this plant</button></div>
   </main>
@@ -84,31 +86,44 @@ h2{font-size:16px;margin:22px 0 6px}
 const $=s=>document.querySelector(s);
 const today=()=>{const d=new Date();return new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
 const esc=s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const SLOTS=[['ff','Flower – front'],['fs','Flower – side'],['leaf','Leaf'],['wide','Whole plant']];
-const FIELDS=['name','flower','leaf','habit','health','planted','bought','details'];
-let db,plants=[],cur=null,dirty=false;
+const FIELDS=['name','variety','flower','leaf','calyx','height','location','bought','notes'];
+let db,plants=[],lists={varieties:['Salvia greggii','Salvia microphylla'],statuses:['Healthy','Very healthy','Struggling','Died']},cur=null,dirty=false;
 
-function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open('salvias',1);r.onupgradeneeded=()=>r.result.createObjectStore('p',{keyPath:'id'});r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
-function tx(mode,fn){return new Promise((res,rej)=>{const t=db.transaction('p',mode);const r=fn(t.objectStore('p'));t.oncomplete=()=>res(r&&r.result);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)})}
-async function load(){plants=(await tx('readonly',s=>s.getAll()))||[];plants.sort((a,b)=>(a.name||'').localeCompare(b.name||''));renderList()}
+function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open('salvias',2);r.onupgradeneeded=()=>{const d=r.result;if(!d.objectStoreNames.contains('p'))d.createObjectStore('p',{keyPath:'id'});if(!d.objectStoreNames.contains('meta'))d.createObjectStore('meta',{keyPath:'id'})};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+function tx(st,mode,fn){return new Promise((res,rej)=>{const t=db.transaction(st,mode);const r=fn(t.objectStore(st));t.oncomplete=()=>res(r&&r.result);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)})}
+async function load(){
+  plants=(await tx('p','readonly',s=>s.getAll()))||[];
+  plants.forEach(p=>{if(!p.height&&p.habit)p.height=p.habit;if(!p.notes&&p.details)p.notes=p.details});
+  plants.sort((a,b)=>(a.name||'').localeCompare(b.name||''));renderList()}
+async function loadLists(){const m=await tx('meta','readonly',s=>s.get('lists'));if(m){lists.varieties=m.varieties||lists.varieties;lists.statuses=m.statuses||lists.statuses}}
+const saveLists=()=>tx('meta','readwrite',s=>s.put({id:'lists',varieties:lists.varieties,statuses:lists.statuses}));
+async function addNew(kind,label){const n=(prompt('New '+label+':')||'').trim();if(!n)return null;const ex=lists[kind].find(x=>x.toLowerCase()===n.toLowerCase());if(ex)return ex;lists[kind].push(n);try{await saveLists()}catch(e){}return n}
+
 function thumb(p){return (p.photos&&(p.photos.wide||p.photos.ff||p.photos.fs||p.photos.leaf))||(p.extras&&p.extras[0])||(p.healthPics&&p.healthPics[0]&&p.healthPics[0].img)||''}
-
 function renderList(){
-  const q=$('#q').value.trim().toLowerCase();
-  const words=q.split(/\s+/).filter(Boolean);
-  const hit=plants.filter(p=>{const t=FIELDS.map(k=>p[k]||'').join(' ').toLowerCase();return words.every(w=>t.includes(w))});
+  const q=$('#q').value.trim().toLowerCase(),words=q.split(/\s+/).filter(Boolean);
+  const txt=p=>FIELDS.map(k=>p[k]||'').concat((p.healthPics||[]).map(x=>x.status||'')).join(' ').toLowerCase();
+  const hit=plants.filter(p=>{const t=txt(p);return words.every(w=>t.includes(w))});
   $('#cnt').textContent='('+(q?hit.length+' of ':'')+plants.length+')';
-  $('#items').innerHTML=hit.length?hit.map(p=>{const t=thumb(p);return `<div class="card" data-id="${p.id}">${t?`<img class="th" src="${t}">`:'<div class="th"></div>'}<div><b>${esc(p.name)||'(unnamed)'}</b><span>${esc((p.flower||'').slice(0,90))}</span></div></div>`}).join(''):`<div class="empty">${plants.length?'No match – you probably don’t have this one yet.':'No plants yet. Tap + to add your first.'}</div>`;
+  $('#items').innerHTML=hit.length?hit.map(p=>{const t=thumb(p);const sub=[p.variety,(p.flower||'').slice(0,70)].filter(Boolean).join(' · ');return `<div class="card" data-id="${p.id}">${t?`<img class="th" src="${t}">`:'<div class="th"></div>'}<div><b>${esc(p.name)||'(unnamed)'}</b><span>${esc(sub)}</span></div></div>`}).join(''):`<div class="empty">${plants.length?'No match – you probably don’t have this one yet.':'No plants yet. Tap + to add your first.'}</div>`;
 }
 
 function shrink(file){return new Promise((res,rej)=>{const u=URL.createObjectURL(file),im=new Image();im.onload=()=>{const k=Math.min(1,1000/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);res(c.toDataURL('image/jpeg',.8))};im.onerror=()=>rej(new Error('bad image'));im.src=u})}
 function pick(cb){const i=document.createElement('input');i.type='file';i.accept='image/*';i.onchange=async()=>{if(!i.files[0])return;try{cb(await shrink(i.files[0]));dirty=true;renderPhotos()}catch(e){alert('Could not read that photo.')}};i.click()}
 
+const optsHTML=(items,val,ph,add)=>{const all=!val||items.includes(val)?items:[...items,val];return `<option value="">${ph}</option>`+all.map(v=>`<option${v===val?' selected':''}>${esc(v)}</option>`).join('')+`<option value="__new">＋ ${add}…</option>`};
+const monthOpts=m=>MONTHS.map((n,i)=>{const v=String(i+1).padStart(2,'0');return `<option value="${v}"${v===m?' selected':''}>${n}</option>`}).join('');
+const yearOpts=y=>{const now=new Date().getFullYear(),a=[];for(let i=now+1;i>=2000;i--)a.push(i);if(!a.includes(+y))a.push(+y);return a.map(i=>`<option${i==y?' selected':''}>${i}</option>`).join('')};
+const ym=x=>(x.date||today()).slice(0,7);
+const renderVariety=()=>{$('#variety').innerHTML=optsHTML(lists.varieties,cur.variety||'','Choose variety…','Add new variety')};
+
 function renderPhotos(){
   const ph=cur.photos;
   let h='<div class="grid">'+SLOTS.map(([k,l])=>ph[k]?`<div class="tile" data-a="view" data-g="${k}"><img src="${ph[k]}"><small>${l}</small><button class="x" data-a="rm" data-g="${k}">×</button></div>`:`<div class="tile e" data-a="add" data-g="${k}"><span class="pl">＋</span><small>${l}</small></div>`).join('')+'</div>';
   h+='<h2>Extra photos</h2><div class="grid">'+cur.extras.map((s,i)=>`<div class="tile" data-a="view" data-g="x" data-i="${i}"><img src="${s}"><button class="x" data-a="rm" data-g="x" data-i="${i}">×</button></div>`).join('')+'<div class="tile e" data-a="add" data-g="x"><span class="pl">＋</span><small>Add extra</small></div></div>';
-  h+='<h2>Health photos (dated)</h2>'+cur.healthPics.map((x,i)=>({x,i})).sort((a,b)=>(b.x.date||'').localeCompare(a.x.date||'')).map(({x,i})=>`<div class="hp"><img src="${x.img}" data-a="view" data-g="h" data-i="${i}"><input type="date" value="${esc(x.date)}" data-hd="${i}"><button class="b d" data-a="rm" data-g="h" data-i="${i}">×</button></div>`).join('')+'<button class="b" data-a="add" data-g="h">＋ Add health photo</button>';
+  h+='<h2>Dated photos</h2><p class="note">How the plant is going through the seasons.</p>'+cur.healthPics.map((x,i)=>({x,i})).sort((a,b)=>ym(b.x).localeCompare(ym(a.x))).map(({x,i})=>{const [y,m]=ym(x).split('-');return `<div class="hp"><img src="${x.img}" data-a="view" data-g="h" data-i="${i}"><div class="hc"><div class="row"><select class="f" data-hm="${i}">${monthOpts(m)}</select><select class="f" data-hy="${i}">${yearOpts(y)}</select></div><select class="f" data-hs="${i}">${optsHTML(lists.statuses,x.status||'','Status…','Add new status')}</select></div><button class="b d" data-a="rm" data-g="h" data-i="${i}">×</button></div>`}).join('')+'<button class="b" data-a="add" data-g="h">＋ Add dated photo</button>';
   $('#ph').innerHTML=h;
 }
 function getImg(g,i){return g==='x'?cur.extras[i]:g==='h'?cur.healthPics[i].img:cur.photos[g]}
@@ -118,9 +133,16 @@ $('#ph').addEventListener('click',e=>{
   const a=t.dataset.a,g=t.dataset.g,i=+t.dataset.i;
   if(a==='rm'){e.stopPropagation();if(!confirm('Remove this photo?'))return;if(g==='x')cur.extras.splice(i,1);else if(g==='h')cur.healthPics.splice(i,1);else delete cur.photos[g];dirty=true;renderPhotos()}
   else if(a==='view'){$('#lb img').src=getImg(g,i);$('#lb').classList.remove('hide')}
-  else if(a==='add'){pick(d=>{if(g==='x')cur.extras.push(d);else if(g==='h')cur.healthPics.push({img:d,date:today()});else cur.photos[g]=d})}
+  else if(a==='add'){pick(d=>{if(g==='x')cur.extras.push(d);else if(g==='h')cur.healthPics.push({img:d,date:today().slice(0,7),status:''});else cur.photos[g]=d})}
 });
-$('#ph').addEventListener('change',e=>{if(e.target.dataset.hd!==undefined){cur.healthPics[+e.target.dataset.hd].date=e.target.value;dirty=true}});
+$('#ph').addEventListener('change',async e=>{
+  const t=e.target,hp=t.closest('.hp');if(!hp)return;
+  if(t.dataset.hm!==undefined||t.dataset.hy!==undefined){
+    const i=+(t.dataset.hm??t.dataset.hy);cur.healthPics[i].date=hp.querySelector('[data-hy]').value+'-'+hp.querySelector('[data-hm]').value;dirty=true;renderPhotos()}
+  else if(t.dataset.hs!==undefined){
+    const i=+t.dataset.hs;let v=t.value;if(v==='__new')v=(await addNew('statuses','status'))||'';cur.healthPics[i].status=v;dirty=true;renderPhotos()}
+});
+$('#variety').onchange=async e=>{let v=e.target.value;if(v==='__new')v=(await addNew('varieties','variety'))||cur.variety||'';cur.variety=v;dirty=true;renderVariety()};
 $('#lb').onclick=()=>$('#lb').classList.add('hide');
 
 function show(v){$('#list').classList.toggle('hide',v!=='list');$('#edit').classList.toggle('hide',v!=='edit');window.scrollTo(0,0)}
@@ -128,7 +150,7 @@ function openEdit(p){
   cur=p?JSON.parse(JSON.stringify(p)):{id:'p'+Date.now(),photos:{},extras:[],healthPics:[]};
   cur.photos=cur.photos||{};cur.extras=cur.extras||[];cur.healthPics=cur.healthPics||[];
   document.querySelectorAll('[data-k]').forEach(el=>el.value=cur[el.dataset.k]||'');
-  $('#del').classList.toggle('hide',!p);dirty=false;renderPhotos();show('edit');
+  $('#del').classList.toggle('hide',!p);dirty=false;renderVariety();renderPhotos();show('edit');
 }
 $('#edit').addEventListener('input',e=>{const k=e.target.dataset.k;if(k){cur[k]=e.target.value;dirty=true}});
 $('#add').onclick=()=>openEdit(null);
@@ -136,15 +158,15 @@ $('#items').onclick=e=>{const c=e.target.closest('.card');if(c)openEdit(plants.f
 $('#back').onclick=()=>{if(dirty&&!confirm('Discard unsaved changes?'))return;show('list')};
 $('#save').onclick=async()=>{
   if(!(cur.name||'').trim()){alert('Please enter a name.');return}
-  try{await tx('readwrite',s=>s.put(cur));dirty=false;await load();show('list')}
+  try{await tx('p','readwrite',s=>s.put(cur));dirty=false;await load();show('list')}
   catch(e){alert('Could not save – phone storage may be full. Try saving a backup and removing some photos.')}
 };
-$('#del').onclick=async()=>{if(!confirm('Delete "'+cur.name+'" and all its photos?'))return;await tx('readwrite',s=>s.delete(cur.id));dirty=false;await load();show('list')};
+$('#del').onclick=async()=>{if(!confirm('Delete "'+cur.name+'" and all its photos?'))return;await tx('p','readwrite',s=>s.delete(cur.id));dirty=false;await load();show('list')};
 $('#q').addEventListener('input',renderList);
 
 $('#exp').onclick=()=>{
   const m=$('#msg');
-  try{const bl=new Blob([JSON.stringify({v:1,plants})],{type:'application/json'});const u=URL.createObjectURL(bl);
+  try{const bl=new Blob([JSON.stringify({v:2,plants,lists})],{type:'application/json'});const u=URL.createObjectURL(bl);
     const a=document.createElement('a');a.href=u;a.download='salvia-backup-'+today()+'.json';document.body.appendChild(a);a.click();a.remove();
     setTimeout(()=>URL.revokeObjectURL(u),5000);m.textContent='Backup saved – check your Downloads folder.'}
   catch(e){m.textContent='Backup was not saved.'}
@@ -152,12 +174,13 @@ $('#exp').onclick=()=>{
 $('#imp').onclick=()=>{const i=document.createElement('input');i.type='file';i.accept='.json,application/json';i.onchange=async()=>{
   try{const o=JSON.parse(await i.files[0].text());const arr=o.plants||[];if(!Array.isArray(arr))throw 0;
     if(!confirm('Restore '+arr.length+' plants? Matching plants will be overwritten.'))return;
-    for(const p of arr){if(p&&p.id)await tx('readwrite',s=>s.put(p))}
+    for(const p of arr){if(p&&p.id)await tx('p','readwrite',s=>s.put(p))}
+    if(o.lists){['varieties','statuses'].forEach(k=>(o.lists[k]||[]).forEach(v=>{if(!lists[k].includes(v))lists[k].push(v)}));await saveLists()}
     await load();$('#msg').textContent='Restored '+arr.length+' plants.'}
   catch(e){$('#msg').textContent='That doesn’t look like a valid backup file.'}};i.click()};
 
 (async()=>{
-  try{db=await openDB();await load();if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{})}
+  try{db=await openDB();await loadLists();await load();if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{})}
   catch(e){$('#items').innerHTML='<div class="empty">Storage is unavailable in this browser mode (private tabs block it). Open in a normal tab.</div>'}
 })();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
