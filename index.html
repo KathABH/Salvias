@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Salvia Collection</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#2f6b3a">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{--bg:#f6f4ee;--card:#fff;--tx:#1d2a1f;--mu:#667066;--ac:#2f6b3a;--ac2:#fff;--bd:#d9d6c8;--dn:#b3261e;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141a15;--card:#1f2721;--tx:#e8efe8;--mu:#97a397;--ac:#6fbf7d;--ac2:#10200f;--bd:#334036;--dn:#f2877f}}
+:root[data-theme="dark"]{--bg:#141a15;--card:#1f2721;--tx:#e8efe8;--mu:#97a397;--ac:#6fbf7d;--ac2:#10200f;--bd:#334036;--dn:#f2877f}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 system-ui,sans-serif}
+.hide{display:none!important}
+header{position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);padding:10px 12px 8px;z-index:5;border-bottom:1px solid var(--bd)}
+header h1{font-size:15px;margin:0 0 6px;color:var(--mu);font-weight:600}
+input,textarea,select,button{font:inherit;color:var(--tx)}
+#q{width:100%;padding:12px 14px;font-size:18px;border:2px solid var(--ac);border-radius:12px;background:var(--card)}
+main{padding:10px 12px 90px}
+.card{display:flex;gap:12px;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:8px;margin-bottom:8px;cursor:pointer}
+.th{width:64px;height:64px;border-radius:8px;background:var(--bd);flex:none;object-fit:cover}
+.card b{display:block}.card span{color:var(--mu);font-size:14px}
+.empty{text-align:center;color:var(--mu);padding:40px 10px}
+.fab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));width:58px;height:58px;border-radius:50%;border:0;background:var(--ac);color:var(--ac2);font-size:32px;box-shadow:0 2px 8px #0005}
+button.b{padding:10px 14px;border-radius:10px;border:1px solid var(--bd);background:var(--card);margin:4px 4px 0 0}
+button.p{background:var(--ac);color:var(--ac2);border-color:var(--ac)}
+button.d{color:var(--dn)}
+label{display:block;font-weight:600;font-size:14px;margin:14px 0 4px}
+.f{width:100%;padding:10px;border:1px solid var(--bd);border-radius:8px;background:var(--card)}
+textarea.f{min-height:90px}textarea.big{min-height:150px}
+.row{display:flex;gap:8px}.row>div{flex:1}
+.bar{display:flex;gap:8px;align-items:center;justify-content:space-between;position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);padding:10px 12px;z-index:5;border-bottom:1px solid var(--bd)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tile{position:relative;aspect-ratio:1;border:2px dashed var(--bd);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-direction:column;overflow:hidden;background:var(--card);cursor:pointer;color:var(--mu)}
+.tile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.tile small{position:absolute;left:0;right:0;bottom:0;background:#000a;color:#fff;text-align:center;padding:2px;font-size:12px}
+.tile.e small{background:none;color:var(--mu)}
+.tile .pl{font-size:34px}
+.x{position:absolute;top:4px;right:4px;width:28px;height:28px;border-radius:50%;border:0;background:#000b;color:#fff;font-size:18px;line-height:1;z-index:2}
+.hp{display:flex;gap:10px;align-items:center;background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:6px;margin-bottom:6px}
+.hp img{width:70px;height:70px;object-fit:cover;border-radius:8px;cursor:pointer}
+.hp input{flex:1}
+h2{font-size:16px;margin:22px 0 6px}
+#lb{position:fixed;inset:0;background:#000e;z-index:20;display:flex;align-items:center;justify-content:center}
+#lb img{max-width:100%;max-height:100%}
+.note{color:var(--mu);font-size:13px}
+</style>
+</head>
+<body>
+<div id="list">
+  <header><h1>🌿 My Salvias <span id="cnt"></span></h1><input id="q" type="search" placeholder="Search name, colour, notes…" autocomplete="off"></header>
+  <main>
+    <div id="items"></div>
+    <h2>Backup</h2>
+    <p class="note">Your plants are stored only in this browser on this phone. Save a backup file now and then.</p>
+    <button class="b" id="exp">Save backup</button>
+    <button class="b" id="imp">Restore backup</button>
+    <p class="note" id="msg"></p>
+  </main>
+  <button class="fab" id="add" aria-label="Add plant">+</button>
+</div>
+
+<div id="edit" class="hide">
+  <div class="bar"><button class="b" id="back">← Back</button><button class="b p" id="save">Save</button></div>
+  <main>
+    <label>Name</label><input class="f" data-k="name">
+    <label>Flower colour (as much detail as you like)</label><textarea class="f big" data-k="flower"></textarea>
+    <label>Leaf shape</label><textarea class="f" data-k="leaf"></textarea>
+    <label>Growing habit (height, spread, shape)</label><textarea class="f" data-k="habit"></textarea>
+    <label>Current health</label><textarea class="f" data-k="health"></textarea>
+    <div class="row"><div><label>Date planted</label><input class="f" type="date" data-k="planted"></div><div><label>Where purchased</label><input class="f" data-k="bought"></div></div>
+    <label>Details / history (nursery-bred, enthusiast-bred, origin…)</label><textarea class="f big" data-k="details"></textarea>
+    <h2>Photos</h2><div id="ph"></div>
+    <div style="margin-top:28px"><button class="b d hide" id="del">Delete this plant</button></div>
+  </main>
+</div>
+<div id="lb" class="hide"><img alt=""></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const today=()=>{const d=new Date();return new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
+const esc=s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const SLOTS=[['ff','Flower – front'],['fs','Flower – side'],['leaf','Leaf'],['wide','Whole plant']];
+const FIELDS=['name','flower','leaf','habit','health','planted','bought','details'];
+let db,plants=[],cur=null,dirty=false;
+
+function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open('salvias',1);r.onupgradeneeded=()=>r.result.createObjectStore('p',{keyPath:'id'});r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+function tx(mode,fn){return new Promise((res,rej)=>{const t=db.transaction('p',mode);const r=fn(t.objectStore('p'));t.oncomplete=()=>res(r&&r.result);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)})}
+async function load(){plants=(await tx('readonly',s=>s.getAll()))||[];plants.sort((a,b)=>(a.name||'').localeCompare(b.name||''));renderList()}
+function thumb(p){return (p.photos&&(p.photos.wide||p.photos.ff||p.photos.fs||p.photos.leaf))||(p.extras&&p.extras[0])||(p.healthPics&&p.healthPics[0]&&p.healthPics[0].img)||''}
+
+function renderList(){
+  const q=$('#q').value.trim().toLowerCase();
+  const words=q.split(/\s+/).filter(Boolean);
+  const hit=plants.filter(p=>{const t=FIELDS.map(k=>p[k]||'').join(' ').toLowerCase();return words.every(w=>t.includes(w))});
+  $('#cnt').textContent='('+(q?hit.length+' of ':'')+plants.length+')';
+  $('#items').innerHTML=hit.length?hit.map(p=>{const t=thumb(p);return `<div class="card" data-id="${p.id}">${t?`<img class="th" src="${t}">`:'<div class="th"></div>'}<div><b>${esc(p.name)||'(unnamed)'}</b><span>${esc((p.flower||'').slice(0,90))}</span></div></div>`}).join(''):`<div class="empty">${plants.length?'No match – you probably don’t have this one yet.':'No plants yet. Tap + to add your first.'}</div>`;
+}
+
+function shrink(file){return new Promise((res,rej)=>{const u=URL.createObjectURL(file),im=new Image();im.onload=()=>{const k=Math.min(1,1000/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);res(c.toDataURL('image/jpeg',.8))};im.onerror=()=>rej(new Error('bad image'));im.src=u})}
+function pick(cb){const i=document.createElement('input');i.type='file';i.accept='image/*';i.onchange=async()=>{if(!i.files[0])return;try{cb(await shrink(i.files[0]));dirty=true;renderPhotos()}catch(e){alert('Could not read that photo.')}};i.click()}
+
+function renderPhotos(){
+  const ph=cur.photos;
+  let h='<div class="grid">'+SLOTS.map(([k,l])=>ph[k]?`<div class="tile" data-a="view" data-g="${k}"><img src="${ph[k]}"><small>${l}</small><button class="x" data-a="rm" data-g="${k}">×</button></div>`:`<div class="tile e" data-a="add" data-g="${k}"><span class="pl">＋</span><small>${l}</small></div>`).join('')+'</div>';
+  h+='<h2>Extra photos</h2><div class="grid">'+cur.extras.map((s,i)=>`<div class="tile" data-a="view" data-g="x" data-i="${i}"><img src="${s}"><button class="x" data-a="rm" data-g="x" data-i="${i}">×</button></div>`).join('')+'<div class="tile e" data-a="add" data-g="x"><span class="pl">＋</span><small>Add extra</small></div></div>';
+  h+='<h2>Health photos (dated)</h2>'+cur.healthPics.map((x,i)=>({x,i})).sort((a,b)=>(b.x.date||'').localeCompare(a.x.date||'')).map(({x,i})=>`<div class="hp"><img src="${x.img}" data-a="view" data-g="h" data-i="${i}"><input type="date" value="${esc(x.date)}" data-hd="${i}"><button class="b d" data-a="rm" data-g="h" data-i="${i}">×</button></div>`).join('')+'<button class="b" data-a="add" data-g="h">＋ Add health photo</button>';
+  $('#ph').innerHTML=h;
+}
+function getImg(g,i){return g==='x'?cur.extras[i]:g==='h'?cur.healthPics[i].img:cur.photos[g]}
+
+$('#ph').addEventListener('click',e=>{
+  const t=e.target.closest('[data-a]');if(!t)return;
+  const a=t.dataset.a,g=t.dataset.g,i=+t.dataset.i;
+  if(a==='rm'){e.stopPropagation();if(!confirm('Remove this photo?'))return;if(g==='x')cur.extras.splice(i,1);else if(g==='h')cur.healthPics.splice(i,1);else delete cur.photos[g];dirty=true;renderPhotos()}
+  else if(a==='view'){$('#lb img').src=getImg(g,i);$('#lb').classList.remove('hide')}
+  else if(a==='add'){pick(d=>{if(g==='x')cur.extras.push(d);else if(g==='h')cur.healthPics.push({img:d,date:today()});else cur.photos[g]=d})}
+});
+$('#ph').addEventListener('change',e=>{if(e.target.dataset.hd!==undefined){cur.healthPics[+e.target.dataset.hd].date=e.target.value;dirty=true}});
+$('#lb').onclick=()=>$('#lb').classList.add('hide');
+
+function show(v){$('#list').classList.toggle('hide',v!=='list');$('#edit').classList.toggle('hide',v!=='edit');window.scrollTo(0,0)}
+function openEdit(p){
+  cur=p?JSON.parse(JSON.stringify(p)):{id:'p'+Date.now(),photos:{},extras:[],healthPics:[]};
+  cur.photos=cur.photos||{};cur.extras=cur.extras||[];cur.healthPics=cur.healthPics||[];
+  document.querySelectorAll('[data-k]').forEach(el=>el.value=cur[el.dataset.k]||'');
+  $('#del').classList.toggle('hide',!p);dirty=false;renderPhotos();show('edit');
+}
+$('#edit').addEventListener('input',e=>{const k=e.target.dataset.k;if(k){cur[k]=e.target.value;dirty=true}});
+$('#add').onclick=()=>openEdit(null);
+$('#items').onclick=e=>{const c=e.target.closest('.card');if(c)openEdit(plants.find(p=>p.id===c.dataset.id))};
+$('#back').onclick=()=>{if(dirty&&!confirm('Discard unsaved changes?'))return;show('list')};
+$('#save').onclick=async()=>{
+  if(!(cur.name||'').trim()){alert('Please enter a name.');return}
+  try{await tx('readwrite',s=>s.put(cur));dirty=false;await load();show('list')}
+  catch(e){alert('Could not save – phone storage may be full. Try saving a backup and removing some photos.')}
+};
+$('#del').onclick=async()=>{if(!confirm('Delete "'+cur.name+'" and all its photos?'))return;await tx('readwrite',s=>s.delete(cur.id));dirty=false;await load();show('list')};
+$('#q').addEventListener('input',renderList);
+
+$('#exp').onclick=()=>{
+  const m=$('#msg');
+  try{const bl=new Blob([JSON.stringify({v:1,plants})],{type:'application/json'});const u=URL.createObjectURL(bl);
+    const a=document.createElement('a');a.href=u;a.download='salvia-backup-'+today()+'.json';document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(u),5000);m.textContent='Backup saved – check your Downloads folder.'}
+  catch(e){m.textContent='Backup was not saved.'}
+};
+$('#imp').onclick=()=>{const i=document.createElement('input');i.type='file';i.accept='.json,application/json';i.onchange=async()=>{
+  try{const o=JSON.parse(await i.files[0].text());const arr=o.plants||[];if(!Array.isArray(arr))throw 0;
+    if(!confirm('Restore '+arr.length+' plants? Matching plants will be overwritten.'))return;
+    for(const p of arr){if(p&&p.id)await tx('readwrite',s=>s.put(p))}
+    await load();$('#msg').textContent='Restored '+arr.length+' plants.'}
+  catch(e){$('#msg').textContent='That doesn’t look like a valid backup file.'}};i.click()};
+
+(async()=>{
+  try{db=await openDB();await load();if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{})}
+  catch(e){$('#items').innerHTML='<div class="empty">Storage is unavailable in this browser mode (private tabs block it). Open in a normal tab.</div>'}
+})();
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
