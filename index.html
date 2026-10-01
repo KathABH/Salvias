@@ -47,7 +47,7 @@ textarea.f{min-height:90px}textarea.big{min-height:150px}
 h2{font-size:16px;margin:22px 0 6px}
 #lb{position:fixed;inset:0;background:#000e;z-index:20;display:flex;align-items:center;justify-content:center}
 #lb img{max-width:100%;max-height:100%}
-textarea.sm{min-height:60px}.hc{flex:1;display:flex;flex-direction:column;gap:6px;min-width:0}.hp select.f{padding:8px}.note{color:var(--mu);font-size:13px}
+textarea.sm{min-height:60px}.hc{flex:1;display:flex;flex-direction:column;gap:6px;min-width:0}.hp select.f{padding:8px}.vh{font-size:22px;font-weight:700;margin:6px 0 0}.vs{color:var(--mu);margin:0 0 8px}.vr{margin:14px 0}.vl{font-size:13px;font-weight:600;color:var(--mu)}.vv{white-space:pre-wrap}.note{color:var(--mu);font-size:13px}
 </style>
 </head>
 <body>
@@ -65,8 +65,9 @@ textarea.sm{min-height:60px}.hc{flex:1;display:flex;flex-direction:column;gap:6p
 </div>
 
 <div id="edit" class="hide">
-  <div class="bar"><button class="b" id="back">← Back</button><button class="b p" id="save">Save</button></div>
-  <main>
+  <div class="bar"><button class="b" id="back">← Back</button><button class="b p hide" id="editBtn">Edit</button><button class="b p hide" id="save">Save</button></div>
+  <main id="viewer"></main>
+  <main id="form" class="hide">
     <label>Name</label><input class="f" data-k="name">
     <label>Variety</label><select class="f" id="variety"></select>
     <label>Flower</label><textarea class="f big" data-k="flower"></textarea>
@@ -89,7 +90,7 @@ const esc=s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const SLOTS=[['ff','Flower – front'],['fs','Flower – side'],['leaf','Leaf'],['wide','Whole plant']];
 const FIELDS=['name','variety','flower','leaf','calyx','height','location','bought','notes'];
-let db,plants=[],lists={varieties:['Salvia greggii','Salvia microphylla'],statuses:['Healthy','Very healthy','Struggling','Died']},cur=null,dirty=false;
+let db,plants=[],lists={varieties:['Salvia greggii','Salvia microphylla'],statuses:['Healthy','Very healthy','Struggling','Died']},cur=null,dirty=false,mode='view',isNew=false;
 
 function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open('salvias',2);r.onupgradeneeded=()=>{const d=r.result;if(!d.objectStoreNames.contains('p'))d.createObjectStore('p',{keyPath:'id'});if(!d.objectStoreNames.contains('meta'))d.createObjectStore('meta',{keyPath:'id'})};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
 function tx(st,mode,fn){return new Promise((res,rej)=>{const t=db.transaction(st,mode);const r=fn(t.objectStore(st));t.oncomplete=()=>res(r&&r.result);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)})}
@@ -101,17 +102,40 @@ async function loadLists(){const m=await tx('meta','readonly',s=>s.get('lists'))
 const saveLists=()=>tx('meta','readwrite',s=>s.put({id:'lists',varieties:lists.varieties,statuses:lists.statuses}));
 async function addNew(kind,label){const n=(prompt('New '+label+':')||'').trim();if(!n)return null;const ex=lists[kind].find(x=>x.toLowerCase()===n.toLowerCase());if(ex)return ex;lists[kind].push(n);try{await saveLists()}catch(e){}return n}
 
-function thumb(p){return (p.photos&&(p.photos.wide||p.photos.ff||p.photos.fs||p.photos.leaf))||(p.extras&&p.extras[0])||(p.healthPics&&p.healthPics[0]&&p.healthPics[0].img)||''}
+function thumb(p){return (p.photos&&(p.photos.ff||p.photos.wide||p.photos.fs||p.photos.leaf))||(p.extras&&p.extras[0])||(p.healthPics&&p.healthPics[0]&&p.healthPics[0].img)||''}
 function renderList(){
   const q=$('#q').value.trim().toLowerCase(),words=q.split(/\s+/).filter(Boolean);
   const txt=p=>FIELDS.map(k=>p[k]||'').concat((p.healthPics||[]).map(x=>x.status||'')).join(' ').toLowerCase();
   const hit=plants.filter(p=>{const t=txt(p);return words.every(w=>t.includes(w))});
   $('#cnt').textContent='('+(q?hit.length+' of ':'')+plants.length+')';
-  $('#items').innerHTML=hit.length?hit.map(p=>{const t=thumb(p);const sub=[p.variety,(p.flower||'').slice(0,70)].filter(Boolean).join(' · ');return `<div class="card" data-id="${p.id}">${t?`<img class="th" src="${t}">`:'<div class="th"></div>'}<div><b>${esc(p.name)||'(unnamed)'}</b><span>${esc(sub)}</span></div></div>`}).join(''):`<div class="empty">${plants.length?'No match – you probably don’t have this one yet.':'No plants yet. Tap + to add your first.'}</div>`;
+  $('#items').innerHTML=hit.length?hit.map(p=>{const t=thumb(p);const sub=p.variety||'';return `<div class="card" data-id="${p.id}">${t?`<img class="th" src="${t}">`:'<div class="th"></div>'}<div><b>${esc(p.name)||'(unnamed)'}</b><span>${esc(sub)}</span></div></div>`}).join(''):`<div class="empty">${plants.length?'No match – you probably don’t have this one yet.':'No plants yet. Tap + to add your first.'}</div>`;
 }
 
 function shrink(file){return new Promise((res,rej)=>{const u=URL.createObjectURL(file),im=new Image();im.onload=()=>{const k=Math.min(1,1000/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);res(c.toDataURL('image/jpeg',.8))};im.onerror=()=>rej(new Error('bad image'));im.src=u})}
-function pick(cb){const i=document.createElement('input');i.type='file';i.accept='image/*';i.onchange=async()=>{if(!i.files[0])return;try{cb(await shrink(i.files[0]));dirty=true;renderPhotos()}catch(e){alert('Could not read that photo.')}};i.click()}
+async function photoDate(f){
+  try{
+    const v=new DataView(await f.slice(0,262144).arrayBuffer());
+    if(v.getUint16(0)!==0xFFD8)throw 0;
+    let o=2;
+    while(o<v.byteLength-4){
+      const m=v.getUint16(o),l=v.getUint16(o+2);
+      if(m===0xFFDA)break;
+      if(m===0xFFE1&&v.getUint32(o+4)===0x45786966){
+        const t=o+10,le=v.getUint16(t)===0x4949,g16=p=>v.getUint16(p,le),g32=p=>v.getUint32(p,le);
+        const find=(ifd,tag)=>{const n=g16(t+ifd);for(let i=0;i<n;i++){const e=t+ifd+2+i*12;if(g16(e)===tag)return g32(e+8)}return null};
+        const i0=g32(t+4),ex=find(i0,0x8769);
+        let off=ex!=null?find(ex,0x9003):null;
+        if(off==null)off=find(i0,0x0132);
+        if(off!=null){let s='';for(let i=0;i<7;i++)s+=String.fromCharCode(v.getUint8(t+off+i));const r=s.match(/^(\d{4}):(\d\d)/);if(r&&r[1]>'1990'&&+r[2]>=1&&+r[2]<=12)return r[1]+'-'+r[2]}
+        break;
+      }
+      o+=2+l;
+    }
+  }catch(e){}
+  if(f.lastModified){const d=new Date(f.lastModified);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
+  return null;
+}
+function pick(cb){const i=document.createElement('input');i.type='file';i.accept='image/*';i.onchange=async()=>{if(!i.files[0])return;try{const f=i.files[0],dt=await photoDate(f);cb(await shrink(f),dt);dirty=true;renderPhotos()}catch(e){alert('Could not read that photo.')}};i.click()}
 
 const optsHTML=(items,val,ph,add)=>{const all=!val||items.includes(val)?items:[...items,val];return `<option value="">${ph}</option>`+all.map(v=>`<option${v===val?' selected':''}>${esc(v)}</option>`).join('')+`<option value="__new">＋ ${add}…</option>`};
 const monthOpts=m=>MONTHS.map((n,i)=>{const v=String(i+1).padStart(2,'0');return `<option value="${v}"${v===m?' selected':''}>${n}</option>`}).join('');
@@ -121,9 +145,9 @@ const renderVariety=()=>{$('#variety').innerHTML=optsHTML(lists.varieties,cur.va
 
 function renderPhotos(){
   const ph=cur.photos;
-  let h='<div class="grid">'+SLOTS.map(([k,l])=>ph[k]?`<div class="tile" data-a="view" data-g="${k}"><img src="${ph[k]}"><small>${l}</small><button class="x" data-a="rm" data-g="${k}">×</button></div>`:`<div class="tile e" data-a="add" data-g="${k}"><span class="pl">＋</span><small>${l}</small></div>`).join('')+'</div>';
-  h+='<h2>Extra photos</h2><div class="grid">'+cur.extras.map((s,i)=>`<div class="tile" data-a="view" data-g="x" data-i="${i}"><img src="${s}"><button class="x" data-a="rm" data-g="x" data-i="${i}">×</button></div>`).join('')+'<div class="tile e" data-a="add" data-g="x"><span class="pl">＋</span><small>Add extra</small></div></div>';
-  h+='<h2>Dated photos</h2><p class="note">How the plant is going through the seasons.</p>'+cur.healthPics.map((x,i)=>({x,i})).sort((a,b)=>ym(b.x).localeCompare(ym(a.x))).map(({x,i})=>{const [y,m]=ym(x).split('-');return `<div class="hp"><img src="${x.img}" data-a="view" data-g="h" data-i="${i}"><div class="hc"><div class="row"><select class="f" data-hm="${i}">${monthOpts(m)}</select><select class="f" data-hy="${i}">${yearOpts(y)}</select></div><select class="f" data-hs="${i}">${optsHTML(lists.statuses,x.status||'','Status…','Add new status')}</select></div><button class="b d" data-a="rm" data-g="h" data-i="${i}">×</button></div>`}).join('')+'<button class="b" data-a="add" data-g="h">＋ Add dated photo</button>';
+  let h='<div class="grid">'+SLOTS.map(([k,l])=>ph[k]?`<div class="tile" data-a="view" data-g="${k}"><img src="${ph[k]}"><button class="x" data-a="rm" data-g="${k}">×</button></div>`:`<div class="tile e" data-a="add" data-g="${k}"><span class="pl">＋</span><small>${l}</small></div>`).join('')+'</div>';
+  h+='<h2>More</h2><div class="grid">'+cur.extras.map((s,i)=>`<div class="tile" data-a="view" data-g="x" data-i="${i}"><img src="${s}"><button class="x" data-a="rm" data-g="x" data-i="${i}">×</button></div>`).join('')+'<div class="tile e" data-a="add" data-g="x"><span class="pl">＋</span><small>Add more</small></div></div>';
+  h+='<h2>Dated photos</h2>'+cur.healthPics.map((x,i)=>({x,i})).sort((a,b)=>ym(b.x).localeCompare(ym(a.x))).map(({x,i})=>{const [y,m]=ym(x).split('-');return `<div class="hp"><img src="${x.img}" data-a="view" data-g="h" data-i="${i}"><div class="hc"><div class="row"><select class="f" data-hm="${i}">${monthOpts(m)}</select><select class="f" data-hy="${i}">${yearOpts(y)}</select></div><select class="f" data-hs="${i}">${optsHTML(lists.statuses,x.status||'','Status…','Add new status')}</select></div><button class="b d" data-a="rm" data-g="h" data-i="${i}">×</button></div>`}).join('')+'<button class="b" data-a="add" data-g="h">＋ Add dated photo</button>';
   $('#ph').innerHTML=h;
 }
 function getImg(g,i){return g==='x'?cur.extras[i]:g==='h'?cur.healthPics[i].img:cur.photos[g]}
@@ -133,7 +157,7 @@ $('#ph').addEventListener('click',e=>{
   const a=t.dataset.a,g=t.dataset.g,i=+t.dataset.i;
   if(a==='rm'){e.stopPropagation();if(!confirm('Remove this photo?'))return;if(g==='x')cur.extras.splice(i,1);else if(g==='h')cur.healthPics.splice(i,1);else delete cur.photos[g];dirty=true;renderPhotos()}
   else if(a==='view'){$('#lb img').src=getImg(g,i);$('#lb').classList.remove('hide')}
-  else if(a==='add'){pick(d=>{if(g==='x')cur.extras.push(d);else if(g==='h')cur.healthPics.push({img:d,date:today().slice(0,7),status:''});else cur.photos[g]=d})}
+  else if(a==='add'){pick((d,dt)=>{if(g==='x')cur.extras.push(d);else if(g==='h')cur.healthPics.push({img:d,date:dt||today().slice(0,7),status:''});else cur.photos[g]=d})}
 });
 $('#ph').addEventListener('change',async e=>{
   const t=e.target,hp=t.closest('.hp');if(!hp)return;
@@ -146,19 +170,34 @@ $('#variety').onchange=async e=>{let v=e.target.value;if(v==='__new')v=(await ad
 $('#lb').onclick=()=>$('#lb').classList.add('hide');
 
 function show(v){$('#list').classList.toggle('hide',v!=='list');$('#edit').classList.toggle('hide',v!=='edit');window.scrollTo(0,0)}
+function setMode(m){mode=m;$('#viewer').classList.toggle('hide',m!=='view');$('#form').classList.toggle('hide',m!=='edit');$('#editBtn').classList.toggle('hide',m!=='view');$('#save').classList.toggle('hide',m!=='edit');window.scrollTo(0,0)}
+function renderViewer(){
+  const p=cur,ph=p.photos||{};
+  const row=(l,v)=>v?`<div class="vr"><div class="vl">${l}</div><div class="vv">${esc(v)}</div></div>`:'';
+  const tiles=SLOTS.filter(([k])=>ph[k]).map(([k])=>`<div class="tile" data-a="view" data-g="${k}"><img src="${ph[k]}"></div>`).join('')+(p.extras||[]).map((x,i)=>`<div class="tile" data-a="view" data-g="x" data-i="${i}"><img src="${x}"></div>`).join('');
+  const dated=(p.healthPics||[]).map((x,i)=>({x,i})).sort((a,b)=>ym(b.x).localeCompare(ym(a.x))).map(({x,i})=>{const [y,m]=ym(x).split('-');return `<div class="hp"><img src="${x.img}" data-a="view" data-g="h" data-i="${i}"><div class="hc"><b>${MONTHS[+m-1]} ${y}</b><span class="note">${esc(x.status||'')}</span></div></div>`}).join('');
+  $('#viewer').innerHTML=`<div class="vh">${esc(p.name)||'(unnamed)'}</div><div class="vs">${esc(p.variety||'')}</div>`+row('Flower',p.flower)+row('Leaf',p.leaf)+row('Calyx',p.calyx)+row('Height',p.height)+row('Location',p.location)+row('Bought from',p.bought)+row('Notes',p.notes)+(tiles?`<h2>Photos</h2><div class="grid">${tiles}</div>`:'')+(dated?`<h2>Dated photos</h2>${dated}`:'');
+}
+$('#viewer').addEventListener('click',e=>{const t=e.target.closest('[data-a="view"]');if(t){$('#lb img').src=getImg(t.dataset.g,+t.dataset.i);$('#lb').classList.remove('hide')}});
 function openEdit(p){
   cur=p?JSON.parse(JSON.stringify(p)):{id:'p'+Date.now(),photos:{},extras:[],healthPics:[]};
   cur.photos=cur.photos||{};cur.extras=cur.extras||[];cur.healthPics=cur.healthPics||[];
   document.querySelectorAll('[data-k]').forEach(el=>el.value=cur[el.dataset.k]||'');
-  $('#del').classList.toggle('hide',!p);dirty=false;renderVariety();renderPhotos();show('edit');
+  $('#del').classList.toggle('hide',!p);dirty=false;isNew=!p;renderVariety();renderPhotos();renderViewer();setMode(p?'view':'edit');show('edit');
 }
 $('#edit').addEventListener('input',e=>{const k=e.target.dataset.k;if(k){cur[k]=e.target.value;dirty=true}});
 $('#add').onclick=()=>openEdit(null);
 $('#items').onclick=e=>{const c=e.target.closest('.card');if(c)openEdit(plants.find(p=>p.id===c.dataset.id))};
-$('#back').onclick=()=>{if(dirty&&!confirm('Discard unsaved changes?'))return;show('list')};
+$('#back').onclick=()=>{
+  if(mode==='edit'){
+    if(dirty&&!confirm('Discard unsaved changes?'))return;
+    if(isNew){show('list');return}
+    openEdit(plants.find(p=>p.id===cur.id));return}
+  show('list')};
+$('#editBtn').onclick=()=>setMode('edit');
 $('#save').onclick=async()=>{
   if(!(cur.name||'').trim()){alert('Please enter a name.');return}
-  try{await tx('p','readwrite',s=>s.put(cur));dirty=false;await load();show('list')}
+  try{await tx('p','readwrite',s=>s.put(cur));dirty=false;await load();openEdit(plants.find(p=>p.id===cur.id))}
   catch(e){alert('Could not save – phone storage may be full. Try saving a backup and removing some photos.')}
 };
 $('#del').onclick=async()=>{if(!confirm('Delete "'+cur.name+'" and all its photos?'))return;await tx('p','readwrite',s=>s.delete(cur.id));dirty=false;await load();show('list')};
