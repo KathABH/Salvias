@@ -137,7 +137,7 @@ async function photoDate(f){
   if(f.lastModified){const d=new Date(f.lastModified);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
   return null;
 }
-function pick(cb){const i=document.createElement('input');i.type='file';i.accept='image/*';i.onchange=async()=>{if(!i.files[0])return;try{const f=i.files[0],dt=await photoDate(f);cb(await shrink(f),dt);dirty=true;renderPhotos()}catch(e){alert('Could not read that photo.')}};i.click()}
+function pick(cb){saveDraft();const i=document.createElement('input');i.type='file';i.accept='image/*';i.onchange=async()=>{if(!i.files[0])return;try{const f=i.files[0],dt=await photoDate(f);cb(await shrink(f),dt);dirty=true;renderPhotos()}catch(e){alert('Could not read that photo.')}};i.click()}
 
 const optsHTML=(items,val,ph,add)=>{const all=!val||items.includes(val)?items:[...items,val];return `<option value="">${ph}</option>`+all.map(v=>`<option${v===val?' selected':''}>${esc(v)}</option>`).join('')+`<option value="__new">＋ ${add}…</option>`};
 const monthOpts=m=>MONTHS.map((n,i)=>{const v=String(i+1).padStart(2,'0');return `<option value="${v}"${v===m?' selected':''}>${n}</option>`}).join('');
@@ -197,6 +197,22 @@ function renderViewer(){
   $('#viewer').innerHTML=`<div class="vh">${esc(p.name)||'(unnamed)'}</div><div class="vs">${esc(p.variety||'')}</div>`+row('Flower',p.flower)+row('Leaf',p.leaf)+row('Calyx',p.calyx)+row('Height',p.height)+row('Location',p.location)+row('Bought from',p.bought)+row('Notes',p.notes)+(tiles?`<h2>Photos</h2><div class="grid">${tiles}</div>`:'')+(dated?`<h2>Dated photos</h2>${dated}`:'');
 }
 $('#viewer').addEventListener('click',e=>{const t=e.target.closest('[data-a="view"]');if(t){$('#lb img').src=getImg(t.dataset.g,+t.dataset.i);$('#lb').classList.remove('hide')}});
+let lastJson='';
+async function saveDraft(){
+  if(mode!=='edit'||!dirty||!cur)return;
+  try{const j=JSON.stringify(cur);if(j===lastJson)return;lastJson=j;await tx('meta','readwrite',s=>s.put({id:'draft',plant:cur,isNew,at:Date.now()}))}catch(e){lastJson=''}
+}
+const clearDraft=()=>{lastJson='';return tx('meta','readwrite',s=>s.delete('draft')).catch(()=>{})};
+function openDraft(dr){
+  cur=dr.plant;cur.photos=cur.photos||{};cur.extras=cur.extras||[];cur.healthPics=cur.healthPics||[];
+  document.querySelectorAll('[data-k]').forEach(el=>el.value=cur[el.dataset.k]||'');
+  isNew=!!dr.isNew;$('#del').classList.toggle('hide',isNew);dirty=true;lastJson='';
+  renderVariety();renderPhotos();renderViewer();setMode('edit');show('edit');
+}
+setInterval(saveDraft,3000);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')saveDraft()});
+window.addEventListener('pagehide',saveDraft);
+window.addEventListener('beforeunload',e=>{if(mode==='edit'&&dirty){saveDraft();e.preventDefault();e.returnValue=''}});
 function openEdit(p){
   cur=p?JSON.parse(JSON.stringify(p)):{id:'p'+Date.now(),photos:{},extras:[],healthPics:[]};
   cur.photos=cur.photos||{};cur.extras=cur.extras||[];cur.healthPics=cur.healthPics||[];
@@ -209,16 +225,17 @@ $('#items').onclick=e=>{const c=e.target.closest('.card');if(c)openEdit(plants.f
 $('#back').onclick=()=>{
   if(mode==='edit'){
     if(dirty&&!confirm('Discard unsaved changes?'))return;
+    clearDraft();
     if(isNew){show('list');return}
     openEdit(plants.find(p=>p.id===cur.id));return}
   show('list')};
 $('#editBtn').onclick=()=>setMode('edit');
 $('#save').onclick=async()=>{
   if(!(cur.name||'').trim()){alert('Please enter a name.');return}
-  try{await tx('p','readwrite',s=>s.put(cur));dirty=false;await load();openEdit(plants.find(p=>p.id===cur.id))}
+  try{await tx('p','readwrite',s=>s.put(cur));dirty=false;await clearDraft();await load();openEdit(plants.find(p=>p.id===cur.id))}
   catch(e){alert('Could not save – phone storage may be full. Try saving a backup and removing some photos.')}
 };
-$('#del').onclick=async()=>{if(!confirm('Delete "'+cur.name+'" and all its photos?'))return;await tx('p','readwrite',s=>s.delete(cur.id));dirty=false;await load();show('list')};
+$('#del').onclick=async()=>{if(!confirm('Delete "'+cur.name+'" and all its photos?'))return;await tx('p','readwrite',s=>s.delete(cur.id));dirty=false;await clearDraft();await load();show('list')};
 $('#q').addEventListener('input',renderList);
 
 $('#exp').onclick=()=>{
@@ -237,7 +254,9 @@ $('#imp').onclick=()=>{const i=document.createElement('input');i.type='file';i.a
   catch(e){$('#msg').textContent='That doesn’t look like a valid backup file.'}};i.click()};
 
 (async()=>{
-  try{db=await openDB();await loadLists();await load();if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{})}
+  try{db=await openDB();await loadLists();await load();
+    {const dr=await tx('meta','readonly',s=>s.get('draft')).catch(()=>null);if(dr&&dr.plant){if(confirm('You have unsaved changes to "'+(dr.plant.name||'a new plant')+'". OK to restore them, or Cancel to throw them away.'))openDraft(dr);else clearDraft()}}
+    if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{})}
   catch(e){$('#items').innerHTML='<div class="empty">Storage is unavailable in this browser mode (private tabs block it). Open in a normal tab.</div>'}
 })();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
