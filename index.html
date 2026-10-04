@@ -47,12 +47,12 @@ textarea.f{min-height:90px}textarea.big{min-height:150px}
 h2{font-size:16px;margin:22px 0 6px}
 #lb{position:fixed;inset:0;background:#000e;z-index:20;display:flex;align-items:center;justify-content:center}
 #lb img{max-width:100%;max-height:100%}
-textarea.sm{min-height:60px}.hc{flex:1;display:flex;flex-direction:column;gap:6px;min-width:0}.hp select.f{padding:8px}.vh{font-size:22px;font-weight:700;margin:6px 0 0}.vs{color:var(--mu);margin:0 0 8px}.vr{margin:14px 0}.vl{font-size:13px;font-weight:600;color:var(--mu)}.vv{white-space:pre-wrap}#vm{position:fixed;inset:0;background:#000a;z-index:15;overflow:auto;padding:16px}.vbox{background:var(--bg);border-radius:12px;padding:14px;max-width:520px;margin:0 auto}#vl .row{margin-bottom:6px}.note{color:var(--mu);font-size:13px}
+textarea.sm{min-height:60px}.hc{flex:1;display:flex;flex-direction:column;gap:6px;min-width:0}.hp select.f{padding:8px}.vh{font-size:22px;font-weight:700;margin:6px 0 0}.vs{color:var(--mu);margin:0 0 8px}.vr{margin:14px 0}.vl{font-size:13px;font-weight:600;color:var(--mu)}.vv{white-space:pre-wrap}#vm{position:fixed;inset:0;background:#000a;z-index:15;overflow:auto;padding:16px}.vbox{background:var(--bg);border-radius:12px;padding:14px;max-width:520px;margin:0 auto}#vl .row{margin-bottom:6px}.tabs{display:flex;gap:6px;margin-top:8px}.tabs button{flex:1;padding:8px;border:1px solid var(--bd);border-radius:10px;background:var(--card)}.tabs .on{background:var(--ac);color:var(--ac2);border-color:var(--ac)}#wm{position:fixed;inset:0;background:#000a;z-index:15;overflow:auto;padding:16px}.note{color:var(--mu);font-size:13px}
 </style>
 </head>
 <body>
 <div id="list">
-  <header><h1>🌿 My Salvias <span id="cnt"></span></h1><input id="q" type="search" placeholder="Search name, variety, flower, notes…" autocomplete="off"></header>
+  <header><h1>🌿 My Salvias <span id="cnt"></span></h1><input id="q" type="search" placeholder="Search name, variety, flower, notes…" autocomplete="off"><div class="tabs"><button id="t1" class="on">My plants</button><button id="t2">Wish list</button></div></header>
   <main>
     <div id="items"></div>
     <h2>Backup</h2>
@@ -83,6 +83,7 @@ textarea.sm{min-height:60px}.hc{flex:1;display:flex;flex-direction:column;gap:6p
   </main>
 </div>
 <div id="vm" class="hide"><div class="vbox"><h2 style="margin-top:0">Edit variety list</h2><p class="note">Change spelling or capitalisation, or remove a name. Plants using a renamed variety are updated automatically.</p><div id="vl"></div><button class="b" id="vadd">＋ Add</button><div style="margin-top:14px"><button class="b p" id="vsave">Done</button><button class="b" id="vcancel">Cancel</button></div></div></div>
+<div id="wm" class="hide"><div class="vbox"><h2 style="margin-top:0">Wish list</h2><label>Name</label><input class="f" id="wn"><label>Notes</label><textarea class="f" id="wo"></textarea><div style="margin-top:14px"><button class="b p" id="wsave">Save</button><button class="b" id="wcancel">Cancel</button></div><div style="margin-top:14px"><button class="b" id="wgot">Got it – add to my plants</button><button class="b d" id="wdel">Delete</button></div></div></div>
 <div id="lb" class="hide"><img alt=""></div>
 
 <script>
@@ -93,6 +94,7 @@ const MONTHS=['January','February','March','April','May','June','July','August',
 const SLOTS=[['ff','Flower – front'],['fs','Flower – side'],['leaf','Leaf'],['wide','Whole plant']];
 const FIELDS=['name','variety','flower','leaf','calyx','height','location','bought','notes'];
 let db,plants=[],lists={varieties:['Salvia greggii','Salvia microphylla'],statuses:['Healthy','Very healthy','Struggling','Died']},cur=null,dirty=false,mode='view',isNew=false;
+let wish=[],tab='plants',pendingWish=null,wcur=null;
 
 function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open('salvias',2);r.onupgradeneeded=()=>{const d=r.result;if(!d.objectStoreNames.contains('p'))d.createObjectStore('p',{keyPath:'id'});if(!d.objectStoreNames.contains('meta'))d.createObjectStore('meta',{keyPath:'id'})};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
 function tx(st,mode,fn){return new Promise((res,rej)=>{const t=db.transaction(st,mode);const r=fn(t.objectStore(st));t.oncomplete=()=>res(r&&r.result);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)})}
@@ -100,6 +102,8 @@ async function load(){
   plants=(await tx('p','readonly',s=>s.getAll()))||[];
   plants.forEach(p=>{if(!p.height&&p.habit)p.height=p.habit;if(!p.notes&&p.details)p.notes=p.details});
   plants.sort((a,b)=>(a.name||'').localeCompare(b.name||''));renderList()}
+async function loadWish(){const w=await tx('meta','readonly',s=>s.get('wishlist'));if(w)wish=w.items||[]}
+const saveWish=()=>{wish.sort((a,b)=>(a.name||'').localeCompare(b.name||''));return tx('meta','readwrite',s=>s.put({id:'wishlist',items:wish}))};
 async function loadLists(){const m=await tx('meta','readonly',s=>s.get('lists'));if(m){lists.varieties=m.varieties||lists.varieties;lists.statuses=m.statuses||lists.statuses}}
 const saveLists=()=>tx('meta','readwrite',s=>s.put({id:'lists',varieties:lists.varieties,statuses:lists.statuses}));
 async function addNew(kind,label){const n=(prompt('New '+label+':')||'').trim();if(!n)return null;const ex=lists[kind].find(x=>x.toLowerCase()===n.toLowerCase());if(ex)return ex;lists[kind].push(n);try{await saveLists()}catch(e){}return n}
@@ -107,11 +111,37 @@ async function addNew(kind,label){const n=(prompt('New '+label+':')||'').trim();
 function thumb(p){return (p.photos&&(p.photos.ff||p.photos.wide||p.photos.fs||p.photos.leaf))||(p.extras&&p.extras[0])||(p.healthPics&&p.healthPics[0]&&p.healthPics[0].img)||''}
 function renderList(){
   const q=$('#q').value.trim().toLowerCase(),words=q.split(/\s+/).filter(Boolean);
-  const txt=p=>FIELDS.map(k=>p[k]||'').concat((p.healthPics||[]).map(x=>x.status||'')).join(' ').toLowerCase();
-  const hit=plants.filter(p=>{const t=txt(p);return words.every(w=>t.includes(w))});
-  $('#cnt').textContent='('+(q?hit.length+' of ':'')+plants.length+')';
-  $('#items').innerHTML=hit.length?hit.map(p=>{const t=thumb(p);const sub=p.variety||'';return `<div class="card" data-id="${p.id}">${t?`<img class="th" src="${t}">`:'<div class="th"></div>'}<div><b>${esc(p.name)||'(unnamed)'}</b><span>${esc(sub)}</span></div></div>`}).join(''):`<div class="empty">${plants.length?'No match – you probably don’t have this one yet.':'No plants yet. Tap + to add your first.'}</div>`;
+  const m=t=>words.every(w=>t.toLowerCase().includes(w));
+  const txt=p=>FIELDS.map(k=>p[k]||'').concat((p.healthPics||[]).map(x=>x.status||'')).join(' ');
+  const hit=plants.filter(p=>m(txt(p))),wh=wish.filter(w=>m((w.name||'')+' '+(w.note||'')));
+  $('#cnt').textContent='('+(q&&tab==='plants'?hit.length+' of ':'')+plants.length+')';
+  $('#t1').textContent='My plants ('+plants.length+')';$('#t2').textContent='Wish list ('+wish.length+')';
+  const wcard=w=>`<div class="card" data-w="${w.id}"><div><b>${esc(w.name)||'(unnamed)'}</b><span>${esc((w.note||'').slice(0,80))}</span></div></div>`;
+  if(tab==='wish'){$('#items').innerHTML=wh.length?wh.map(wcard).join(''):`<div class="empty">${wish.length?'No match on your wish list.':'Nothing on your wish list yet. Tap + to add one.'}</div>`;return}
+  let h=hit.length?hit.map(p=>{const t=thumb(p);return `<div class="card" data-id="${p.id}">${t?`<img class="th" src="${t}">`:'<div class="th"></div>'}<div><b>${esc(p.name)||'(unnamed)'}</b><span>${esc(p.variety||'')}</span></div></div>`}).join(''):`<div class="empty">${plants.length?'No match – you probably don’t have this one yet.':'No plants yet. Tap + to add your first.'}</div>`;
+  if(q&&wh.length)h+='<h2>On your wish list</h2>'+wh.map(wcard).join('');
+  $('#items').innerHTML=h;
 }
+function setTab(t){tab=t;$('#t1').classList.toggle('on',t==='plants');$('#t2').classList.toggle('on',t==='wish');renderList()}
+$('#t1').onclick=()=>setTab('plants');$('#t2').onclick=()=>setTab('wish');
+function openWish(w){
+  wcur=w||{id:'w'+Date.now(),name:'',note:'',isNew:true};
+  $('#wn').value=wcur.name;$('#wo').value=wcur.note||'';
+  $('#wdel').classList.toggle('hide',!w);$('#wgot').classList.toggle('hide',!w);
+  $('#wm').classList.remove('hide');if(!w)$('#wn').focus();
+}
+$('#wcancel').onclick=()=>$('#wm').classList.add('hide');
+$('#wsave').onclick=async()=>{
+  const n=$('#wn').value.trim();if(!n){alert('Please enter a name.');return}
+  wcur.name=n;wcur.note=$('#wo').value;if(wcur.isNew){delete wcur.isNew;wish.push(wcur)}
+  try{await saveWish()}catch(e){alert('Could not save.')}
+  $('#wm').classList.add('hide');renderList();
+};
+$('#wdel').onclick=async()=>{if(!confirm('Remove "'+wcur.name+'" from your wish list?'))return;wish=wish.filter(w=>w.id!==wcur.id);await saveWish();$('#wm').classList.add('hide');renderList()};
+$('#wgot').onclick=()=>{
+  const w=wcur;$('#wm').classList.add('hide');setTab('plants');openEdit(null);pendingWish=w.id;
+  cur.name=w.name;cur.notes=w.note||'';$('[data-k=name]').value=cur.name;$('[data-k=notes]').value=cur.notes;dirty=true;
+};
 
 function shrink(file){return new Promise((res,rej)=>{const u=URL.createObjectURL(file),im=new Image();im.onload=()=>{const k=Math.min(1,1000/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);res(c.toDataURL('image/jpeg',.8))};im.onerror=()=>rej(new Error('bad image'));im.src=u})}
 async function photoDate(f){
@@ -220,19 +250,21 @@ function openEdit(p){
   $('#del').classList.toggle('hide',!p);dirty=false;isNew=!p;renderVariety();renderPhotos();renderViewer();setMode(p?'view':'edit');show('edit');
 }
 $('#edit').addEventListener('input',e=>{const k=e.target.dataset.k;if(k){cur[k]=e.target.value;dirty=true}});
-$('#add').onclick=()=>openEdit(null);
-$('#items').onclick=e=>{const c=e.target.closest('.card');if(c)openEdit(plants.find(p=>p.id===c.dataset.id))};
+$('#add').onclick=()=>{if(tab==='wish')openWish(null);else{pendingWish=null;openEdit(null)}};
+$('#items').onclick=e=>{const c=e.target.closest('.card');if(!c)return;if(c.dataset.w)openWish(wish.find(w=>w.id===c.dataset.w));else openEdit(plants.find(p=>p.id===c.dataset.id))};
 $('#back').onclick=()=>{
   if(mode==='edit'){
     if(dirty&&!confirm('Discard unsaved changes?'))return;
     clearDraft();
-    if(isNew){show('list');return}
+    if(isNew){pendingWish=null;show('list');return}
     openEdit(plants.find(p=>p.id===cur.id));return}
   show('list')};
 $('#editBtn').onclick=()=>setMode('edit');
 $('#save').onclick=async()=>{
   if(!(cur.name||'').trim()){alert('Please enter a name.');return}
-  try{await tx('p','readwrite',s=>s.put(cur));dirty=false;await clearDraft();await load();openEdit(plants.find(p=>p.id===cur.id))}
+  try{await tx('p','readwrite',s=>s.put(cur));dirty=false;await clearDraft();
+    if(pendingWish){wish=wish.filter(w=>w.id!==pendingWish);pendingWish=null;await saveWish()}
+    await load();openEdit(plants.find(p=>p.id===cur.id))}
   catch(e){alert('Could not save – phone storage may be full. Try saving a backup and removing some photos.')}
 };
 $('#del').onclick=async()=>{if(!confirm('Delete "'+cur.name+'" and all its photos?'))return;await tx('p','readwrite',s=>s.delete(cur.id));dirty=false;await clearDraft();await load();show('list')};
@@ -240,7 +272,7 @@ $('#q').addEventListener('input',renderList);
 
 $('#exp').onclick=()=>{
   const m=$('#msg');
-  try{const bl=new Blob([JSON.stringify({v:2,plants,lists})],{type:'application/json'});const u=URL.createObjectURL(bl);
+  try{const bl=new Blob([JSON.stringify({v:3,plants,lists,wish})],{type:'application/json'});const u=URL.createObjectURL(bl);
     const a=document.createElement('a');a.href=u;a.download='salvia-backup-'+today()+'.json';document.body.appendChild(a);a.click();a.remove();
     setTimeout(()=>URL.revokeObjectURL(u),5000);m.textContent='Backup saved – check your Downloads folder.'}
   catch(e){m.textContent='Backup was not saved.'}
@@ -250,11 +282,12 @@ $('#imp').onclick=()=>{const i=document.createElement('input');i.type='file';i.a
     if(!confirm('Restore '+arr.length+' plants? Matching plants will be overwritten.'))return;
     for(const p of arr){if(p&&p.id)await tx('p','readwrite',s=>s.put(p))}
     if(o.lists){['varieties','statuses'].forEach(k=>(o.lists[k]||[]).forEach(v=>{if(!lists[k].includes(v))lists[k].push(v)}));await saveLists()}
+    if(Array.isArray(o.wish)){o.wish.forEach(w=>{if(w&&w.id&&!wish.some(x=>x.id===w.id))wish.push(w)});await saveWish()}
     await load();$('#msg').textContent='Restored '+arr.length+' plants.'}
   catch(e){$('#msg').textContent='That doesn’t look like a valid backup file.'}};i.click()};
 
 (async()=>{
-  try{db=await openDB();await loadLists();await load();
+  try{db=await openDB();await loadLists();await loadWish();await load();
     {const dr=await tx('meta','readonly',s=>s.get('draft')).catch(()=>null);if(dr&&dr.plant){if(confirm('You have unsaved changes to "'+(dr.plant.name||'a new plant')+'". OK to restore them, or Cancel to throw them away.'))openDraft(dr);else clearDraft()}}
     if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{})}
   catch(e){$('#items').innerHTML='<div class="empty">Storage is unavailable in this browser mode (private tabs block it). Open in a normal tab.</div>'}
